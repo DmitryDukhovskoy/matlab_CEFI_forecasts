@@ -1,3 +1,5 @@
+% The code has not been fully tested 
+%
 % Create monthly OBC fields of total alkalinity (TA) and
 % Dissolved Inorganic Carbon DIC  for COBALT
 % From daily OBC fields
@@ -47,8 +49,10 @@ dnmb_ref = datenum(1993,1,1);  % reference date for NetCDF time var
 
 
 DATA = struct;
-for isegm = 1:4
-  DATA(1).segm(isegm) = struct;
+for iyr = 1:Nyrs_save
+  for isegm = 1:4
+    DATA(iyr).segm(isegm) = struct;
+  end
 end
 
 kYR=0;
@@ -92,9 +96,6 @@ for YR=YR1:YR2;
     lon = squeeze(ncread(dflnc, lonname ));
     DZ  = squeeze(ncread(dflnc, dzname  )); % layers dz with time, write it to the output as is
     [dim1, dim2, dim3] = size(T3d);          % horiz axis, depth, days
-
-    DATA(kYR).segm(isegm).lon = lon;
-    DATA(kYR).segm(isegm).lat = lat;
 
     % Derive nx, ny dimensions
     if ~isfield(DATA(kYR).segm(isegm), 'nx_segm') || ...
@@ -144,7 +145,8 @@ for YR=YR1:YR2;
     else
       kday2 = nrecs;
     end
-  
+ 
+    iday = 0; 
     for kday=kday1:kday2
       fprintf('  ---  segm %i jday=%i \n',isegm,JDAY(kday))
       est_dates = [YR + JDAY(kday)/JDAY(end)];
@@ -185,13 +187,23 @@ for YR=YR1:YR2;
       % Forward fill missing values down the rows (fill bottom if NaNs):
       alk = fillmissing(alk, 'previous', 1);
       dic = fillmissing(dic, 'previous', 1);
-      
-      DATA(kYR).segm(isegm).alk(kday,:,:) = alk;
-      DATA(kYR).segm(isegm).dic(kday,:,:) = dic;
-      DATA(kYR).segm(isegm).jdays(kday)   = JDAY(kday);
-      DATA(kYR).segm(isegm).dnmb(kday)    = TMM(kday);
+     
+      iday = iday + 1; 
+      DATA(kYR).segm(isegm).alk(iday,:,:) = alk;
+      DATA(kYR).segm(isegm).dic(iday,:,:) = dic;
+      DATA(kYR).segm(isegm).jdays(iday)   = JDAY(kday);
+      DATA(kYR).segm(isegm).dnmb(iday)    = TMM(kday);
 
     end  % for kday
+
+    nt  = length(DATA(kYR).segm(isegm).dnmb);
+    DZp = permute(DZ, [3,2,1]);
+    DZp = DZp(1:nt,:,:);
+    DATA(kYR).segm(isegm).DZp = DZp;
+    DATA(kYR).segm(isegm).lon = lon;
+    DATA(kYR).segm(isegm).lat = lat;
+
+
   end    % for isegm
     
   if kYR == Nyrs_save
@@ -220,6 +232,11 @@ for YR=YR1:YR2;
         xdim = 1;
         ydim = hdim;
       end
+
+      nx  = DATA(1).segm(isegm).nx_segm;
+      ny  = DATA(1).segm(isegm).ny_segm;
+      nz  = DATA(1).segm(isegm).nz_segm;
+      nt  = length(TMM);
 
       segstr = sprintf('_segment_%3.3i',isegm);
       alk_var = sprintf('alk%s',segstr);
@@ -305,7 +322,8 @@ for YR=YR1:YR2;
 
         alkT = DATA(iyr).segm(isegm).alk;  % [days, nz, nx]
         dicT = DATA(iyr).segm(isegm).dic; 
-        TMM  = DATA(iyr).segm(isegm).TM - dnmb_ref;   % monthly data time stamps, days since ...
+        TMM  = DATA(iyr).segm(isegm).dnmb - dnmb_ref;   % monthly data time stamps, days since ...
+        DZp  = DATA(iyr).segm(isegm).DZp;
         lon_segm = DATA(iyr).segm(isegm).lon;
         lat_segm = DATA(iyr).segm(isegm).lat;
        
@@ -316,7 +334,7 @@ for YR=YR1:YR2;
       
         dstr1 = datestr(TMM(1)+dnmb_ref, 'yyyy-mm-dd');
         dstr2 = datestr(TMM(end)+dnmb_ref, 'yyyy-mm-dd');
-        fprintf('  Segment %i | nx = %i, ny = %i | time: %s to %s\n', isegm, nx, ny, ds1, ds2);
+        fprintf('  Segment %i | nx = %i, ny = %i | time: %s to %s\n', isegm, nx, ny, dstr1, dstr2);
 
         if nx > 1 && ny > 1
           error(' ERR: one of dim should be singleton: nx=%i, ny=%i\n',nx,ny);
@@ -333,14 +351,12 @@ for YR=YR1:YR2;
         alkT = reshape(alkT, nt, nz, ny, nx); 
         dicT = reshape(dicT, nt, nz, ny, nx); 
 
-        DZ = permute(DZ, [3,2,1]);
-        DZ = DZ(1:nt,:,:);
-        DZ = reshape(DZ, nt, nz, ny, nx);
+        DZp = reshape(DZp, nt, nz, ny, nx);
 
         ncwrite(flesper_out, alk_var,   alkT, [itime+1, 1, 1, 1]);
         ncwrite(flesper_out, dic_var,   dicT, [itime+1, 1, 1, 1]);
-        ncwrite(flesper_out, dzalk_var, DZ, [itime+1, 1, 1, 1]);
-        ncwrite(flesper_out, dzdic_var, DZ, [itime+1, 1, 1, 1]);
+        ncwrite(flesper_out, dzalk_var, DZp, [itime+1, 1, 1, 1]);
+        ncwrite(flesper_out, dzdic_var, DZp, [itime+1, 1, 1, 1]);
         if iyr == 1
           ncwrite(flesper_out, lat_var,   lat_segm, 1);
           ncwrite(flesper_out, lon_var,   lon_segm, 1);
