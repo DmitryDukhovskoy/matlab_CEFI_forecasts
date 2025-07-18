@@ -1,0 +1,51 @@
+# Compiled source #
+###################
+*.com
+*.class
+*.dll
+*.exe
+*.o
+*.so
+
+# Text files, readmes #
+#######################
+*.txt
+README.*
+
+# Packages #
+############
+# better to unpack these files and commit the raw source
+# git has its own built in compression methods
+*.7z
+*.dmg
+*.gz
+*.iso
+*.jar
+*.rar
+*.tar
+*.zip
+
+# Logs and databases #
+######################
+*.log
+*.logs
+*.sql
+*.sqlite
+
+# Modules and backups #
+#######################
+**/__pycache__/*
+*.py*bkp
+**/bkp/*
+.*.swp
+*.mat
+
+# Somebody else's codes #
+#########################
+**/TEOS_10/*
+**/ESPER-main/*
+
+# My codes that already on Github #
+###################################
+/MyMatlab/
+
