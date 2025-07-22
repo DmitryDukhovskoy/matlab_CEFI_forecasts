@@ -32,19 +32,12 @@ pthesper = '/work/Dmitry.Dukhovskoy/NEP_input/BGC_esper_seasfcast/';
 
 dftopo = sprintf('%stopog.nc',pthtopo);
 % To allow for the YR arguments passed from the command line:
-%matlab -nodisplay -nosplash -r "YR1=${YS}; YR2=${YE}; run('esper_cobalt_OBCdaily.m'); exit;"
-% Uncomment these:
-%if ~exist('YR1', 'var')
-%  YR1 = 2023;
-%end
-%if ~exist('YR2', 'var')
-%  YR2 = 2023;
-%end
-
-% and comment this:
-YR1 = 2023;
-YR2 = 2023;
-
+if ~exist('YR1', 'var')
+  YR1 = 2023;
+end
+if ~exist('YR2', 'var')
+  YR2 = 2023;
+end
 Nyrs_save = 2;    % how many years save in 1 file
 YR2    = YR2+(Nyrs_save-1);
 MMI    = 1;    % SPEAR init month: 1, 4, 7, 10
@@ -240,56 +233,120 @@ for YR=YR1:YR2;
     end
     fprintf('Saving fields --> %s\n',flesper_out);
 
-    % -----------------------------
+    % create netcdf, define dims:
+    for isegm=1:4
+      [ndays, zdim, hdim] = size(DATA(1).segm(isegm).alk);
+
+      if isegm == 1 || isegm == 3
+        xdim = hdim;
+        ydim = 1;
+      else
+        xdim = 1;
+        ydim = hdim;
+      end
+
+      nx  = DATA(1).segm(isegm).nx_segm;
+      ny  = DATA(1).segm(isegm).ny_segm;
+      nz  = DATA(1).segm(isegm).nz_segm;
+      nt  = length(TMM);
+
+      segstr    = DATA(kYR).segm(isegm).segstr;
+      alk_var   = DATA(kYR).segm(isegm).alk_var;
+      dic_var   = DATA(kYR).segm(isegm).dic_var;
+      dzalk_var = DATA(kYR).segm(isegm).dzalk_var;
+      dzdic_var = DATA(kYR).segm(isegm).dzdic_var;
+      lat_var   = DATA(kYR).segm(isegm).lat_var;
+      lon_var   = DATA(kYR).segm(isegm).lon_var;
+      zdim_name = DATA(kYR).segm(isegm).zdim_name;
+      ydim_name = DATA(kYR).segm(isegm).ydim_name;
+      xdim_name = DATA(kYR).segm(isegm).xdim_name;
+
+      %fprintf('nccreate: %s, %s, %s, %s, %s, %s, %s, %s\n',...
+      % alk_var, dic_var, dzalk_var, dzdic_var, lat_var, xdim_name, lon_var, ydim_name)
+      % Note Matlab saves to betcdf in reverse order, 
+      % so start with the last dimension - will be 1st in NetCDF
+      dimStr = {xdim_name,nx, ydim_name,ny, zdim_name,zdim, 'time',Inf};
+      nccreate(flesper_out, alk_var, ...
+       'Dimensions', dimStr,...
+       'Datatype', 'double',...
+       'FillValue', 1e20,...
+       'Format', 'netcdf4');
+
+      nccreate(flesper_out, dic_var, ...
+       'Dimensions', dimStr,...
+       'Datatype', 'double',...
+       'FillValue', 1e20,...
+       'Format', 'netcdf4');
+
+      nccreate(flesper_out, dzalk_var, ...
+       'Dimensions', dimStr,...
+       'Datatype', 'double',...
+       'FillValue', 1e20,...
+       'Format', 'netcdf4');
+
+      nccreate(flesper_out, dzdic_var, ...
+       'Dimensions', dimStr,...
+       'Datatype', 'double',...
+       'FillValue', 1e20,...
+       'Format', 'netcdf4');
+
+      if isegm == 1 || isegm == 3
+        nccreate(flesper_out, lat_var, ...
+         'Dimensions', {xdim_name, nx},...
+         'Datatype', 'double',...
+         'FillValue', 1e20,...
+         'Format', 'netcdf4');
+
+        nccreate(flesper_out, lon_var, ...
+         'Dimensions', {xdim_name, nx},...
+         'Datatype', 'double',...
+         'FillValue', 1e20,...
+         'Format', 'netcdf4');
+
+        nccreate(flesper_out, xdim_name,...
+         'Dimensions', {xdim_name, nx},...
+         'Datatype', 'int32',...
+         'Format', 'netcdf4');
+      else
+        nccreate(flesper_out, lat_var, ...
+         'Dimensions', {ydim_name, ny},...
+         'Datatype', 'double',...
+         'FillValue', 1e20,...
+         'Format', 'netcdf4');
+
+        nccreate(flesper_out, lon_var, ...
+         'Dimensions', {ydim_name, ny},...
+         'Datatype', 'double',...
+         'FillValue', 1e20,...
+         'Format', 'netcdf4');
+
+        nccreate(flesper_out, ydim_name,...
+         'Dimensions', {ydim_name, ny},...
+         'Datatype', 'int32',...
+         'Format', 'netcdf4');
+      end
+
+      nccreate(flesper_out, zdim_name,...
+       'Dimensions', {zdim_name, nz},...
+       'Datatype', 'int32',...
+       'Format', 'netcdf4');
+
+    end
+
+    nccreate(flesper_out, 'time', ...
+        'Dimensions', {'time', Inf}, ...
+        'Datatype', 'double', ...
+        'FillValue', 1e20,...
+        'Format', 'netcdf4');
+
+    % Add the units & calendar attributes for time variable:
+    dv_ref = datevec(dnmb_ref);
+    tref_str = sprintf('days since %04d-%02d-%02d 00:00:00', dv_ref(1), dv_ref(2), dv_ref(3));
+    ncwriteatt(flesper_out, 'time', 'units', tref_str);
+    ncwriteatt(flesper_out, 'time', 'calendar', 'gregorian');
+
     % Write data yr by yr
     % format: alk_segment_002(time, nz_segment_002, ny_segment_002, nx_segment_002) 
-    
-    % Write Time
-    % Define time BEFORE writing the variables to avoid matlab 
-    % error in creating corrupted netcdf due to dimension confusion
-    itime = 0;
-    for iyr = 1:Nyrs_save  
-      TMM  = DATA(iyr).segm(1).dnmb - dnmb_ref;   % monthly data time stamps, days since ...
-      if iyr == 1; create_ncvar(flesper_out, 'time', {'time', Inf}); end
-      ncwrite(flesper_out, 'time', TMM, itime+1); 
-      itime = itime + nt;      
-      fprintf('time var written ok, iyr=%i itime=%i\n',iyr,itime);
-    end
-
-    % Write coordinates & dimensions BEFORE writing the variables
-    iyr = 1;
-    for isegm = 1:4
-      lat_var   = DATA(iyr).segm(isegm).lat_var;
-      lon_var   = DATA(iyr).segm(isegm).lon_var;
-      zdim_name = DATA(iyr).segm(isegm).zdim_name;
-      ydim_name = DATA(iyr).segm(isegm).ydim_name;
-      xdim_name = DATA(iyr).segm(isegm).xdim_name;
-      lon_segm  = DATA(iyr).segm(isegm).lon;
-      lat_segm  = DATA(iyr).segm(isegm).lat;
-      nx  = DATA(iyr).segm(isegm).nx_segm;
-      ny  = DATA(iyr).segm(isegm).ny_segm;
-      nz  = DATA(iyr).segm(isegm).nz_segm;
-
-      create_ncvar(flesper_out, zdim_name, {zdim_name, nz}, 'int32')
-      ncwrite(flesper_out, zdim_name, 0:nz-1, 1);
-      if isegm == 1 || isegm == 3
-        create_ncvar(flesper_out, lat_var, {xdim_name, nx})
-        create_ncvar(flesper_out, lon_var, {xdim_name, nx})
-        create_ncvar(flesper_out, xdim_name, {xdim_name, nx}, 'int32')
-        ncwrite(flesper_out, xdim_name, 0:nx-1, 1);
-      else
-        create_ncvar(flesper_out, lat_var, {ydim_name, ny})
-        create_ncvar(flesper_out, lon_var, {ydim_name, ny})
-        create_ncvar(flesper_out, ydim_name, {ydim_name, ny}, 'int32')
-        ncwrite(flesper_out, ydim_name, 0:ny-1, 1);
-      end
-      ncwrite(flesper_out, lat_var,   lat_segm, 1);
-      fprintf('%s written ok\n',lat_var)
-      ncwrite(flesper_out, lon_var,   lon_segm, 1);
-      fprintf('%s written ok\n',lon_var)
-    end
-
-    % Write variables
     itime = 0;
     for iyr = 1:Nyrs_save
       for isegm = 1:4
@@ -298,16 +355,18 @@ for YR=YR1:YR2;
         dic_var   = DATA(iyr).segm(isegm).dic_var;
         dzalk_var = DATA(iyr).segm(isegm).dzalk_var;
         dzdic_var = DATA(iyr).segm(isegm).dzdic_var;
-        lat_var   = DATA(kYR).segm(isegm).lat_var;
-        lon_var   = DATA(kYR).segm(isegm).lon_var;
-        zdim_name = DATA(kYR).segm(isegm).zdim_name;
-        ydim_name = DATA(kYR).segm(isegm).ydim_name;
-        xdim_name = DATA(kYR).segm(isegm).xdim_name;
+        lat_var   = DATA(iyr).segm(isegm).lat_var;
+        lon_var   = DATA(iyr).segm(isegm).lon_var;
+        zdim_name = DATA(iyr).segm(isegm).zdim_name;
+        ydim_name = DATA(iyr).segm(isegm).ydim_name;
+        xdim_name = DATA(iyr).segm(isegm).xdim_name;
 
         alkT = DATA(iyr).segm(isegm).alk;  % [days, nz, nx]
         dicT = DATA(iyr).segm(isegm).dic; 
         TMM  = DATA(iyr).segm(isegm).dnmb - dnmb_ref;   % monthly data time stamps, days since ...
         DZp  = DATA(iyr).segm(isegm).DZp;
+        lon_segm = DATA(iyr).segm(isegm).lon;
+        lat_segm = DATA(iyr).segm(isegm).lat;
        
         nx  = DATA(iyr).segm(isegm).nx_segm;
         ny  = DATA(iyr).segm(isegm).ny_segm;
@@ -339,29 +398,23 @@ for YR=YR1:YR2;
         DZp  = reshape(DZp, nt, nz, ny, nx);
         DZp  = permute(DZp, [4 3 2 1]);
 
-        if iyr == 1
-          dimStr = {xdim_name,nx, ydim_name,ny, zdim_name,zdim, 'time',Inf};
-          create_ncvar(flesper_out, alk_var, dimStr)
-          create_ncvar(flesper_out, dic_var, dimStr)
-          create_ncvar(flesper_out, dzalk_var, dimStr)
-          create_ncvar(flesper_out, dzdic_var, dimStr)
-        end
-
         ncwrite(flesper_out, alk_var,   alkT, [1, 1, 1, itime+1]);
         ncwrite(flesper_out, dic_var,   dicT, [1, 1, 1, itime+1]);
         ncwrite(flesper_out, dzalk_var, DZp, [1, 1, 1, itime+1]);
         ncwrite(flesper_out, dzdic_var, DZp, [1, 1, 1, itime+1]);
+        if iyr == 1
+          ncwrite(flesper_out, lat_var,   lat_segm, 1);
+          ncwrite(flesper_out, lon_var,   lon_segm, 1);
+          ncwrite(flesper_out, zdim_name, 0:nz-1, 1);
+          if isegm == 1 || isegm == 3
+            ncwrite(flesper_out, xdim_name, 0:nx-1, 1);
+          else
+            ncwrite(flesper_out, ydim_name, 0:ny-1, 1);
+          end
+        end
       end
       itime = itime+nt;
     end
-
-    
-    % Add the units & calendar attributes for time variable:
-    dv_ref = datevec(dnmb_ref);
-    tref_str = sprintf('days since %04d-%02d-%02d 00:00:00', dv_ref(1), dv_ref(2), dv_ref(3));
-    ncwriteatt(flesper_out, 'time', 'units', tref_str);
-    ncwriteatt(flesper_out, 'time', 'calendar', 'gregorian');
-
 
     % Rearrange fields:
     for iiy=2:kYR
@@ -375,14 +428,23 @@ for YR=YR1:YR2;
 
 end    % years
 
+        
 
-function ncvar_exists = var_exists(ncfile, varname)
-  ncvar_exists = false;
-  if isfile(ncfile)
-    info = ncinfo(ncfile);
-    vars = {info.Variables.Name};
-    ncvar_exists = any(strcmp(varname, vars));
-  end
+% Check:
+fchck=0;
+if fchck
+  AMX=ESPER_Mixed([1 2 3 4 5 6 7],[0 0 100;0 0 1000;-150 0 100],...
+                    [35 0.5 5 10 20 200;35 0.5 5 10 20 200;32 0.5 5 10 20 200],[1 3 2 4 5 6],...
+                    'Equations',[1 16 8],'EstDates',[1980;2002;2030]);
+
+  ANN=ESPER_NN([1 2 3 4 5 6 7],[0 0 100;0 0 1000;-150 0 100],...
+                    [35 0.5 5 10 20 200;35 0.5 5 10 20 200;32 0.5 5 10 20 200],[1 3 2 4 5 6],...
+                    'Equations',[8],'EstDates',[1980;2002;2030]);
+
+
+  op=outp_coords(1:4,:);
+  pv=pred_vars(1:4,:);
+  TLR=ESPER_LIR(requested_vars, op, pv, predictor_types, 'Equations', [8], 'EstDates', est_dates);
+  TNN=ESPER_NN(requested_vars, op, pv, predictor_types, 'Equations', [8], 'EstDates', est_dates);
 end
-
  
