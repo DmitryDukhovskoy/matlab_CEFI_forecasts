@@ -1,4 +1,4 @@
-% The code has not been fully tested 
+% Workgin netcdf writing
 %
 % Create monthly OBC fields of total alkalinity (TA) and
 % Dissolved Inorganic Carbon DIC  for COBALT
@@ -42,13 +42,13 @@ dftopo = sprintf('%stopog.nc',pthtopo);
 %end
 
 % and comment this:
-YR1 = 2023;
-YR2 = 2023;
+YR1 = 2022;
+YR2 = 2022;
 
 Nyrs_save = 2;    % how many years save in 1 file
 YR2    = YR2+(Nyrs_save-1);
 MMI    = 1;    % SPEAR init month: 1, 4, 7, 10
-enmb   = 3;    % SPEAR ens numb: 1,..., 10
+enmb   = 1;    % SPEAR ens numb: 1,..., 10
 requested_vars  = [1,2];  % Request total alk, DIC
 predictor_types = [1,2];
 equations = [8];
@@ -364,15 +364,14 @@ for YR=YR1:YR2;
 
 
     % Rearrange fields:
-    for iiy=2:kYR
-      DATA(iiy-1).alk = DATA(iiy).alk;
-      DATA(iiy-1).dic = DATA(iiy).dic;
-      DATA(iiy-1).TM  = DATA(iiy).TM;
-      kYR = 1;
+    for isegm = 1:4
+      DATA(1:kYR-1).segm(isegm) = DATA(2:kYR).segm(isegm);
+      DATA(kYR).segm(isegm).alk = [];
+      DATA(kYR).segm(isegm).dic = [];
     end
+    kYR = 1;  % Start with yr=2 for the next YR, as YR-1 is already in DATA(1)
 
   end    % if kYR
-
 end    % years
 
 
