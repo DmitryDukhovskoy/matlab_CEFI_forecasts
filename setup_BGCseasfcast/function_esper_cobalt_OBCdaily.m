@@ -1,4 +1,6 @@
-% Working netcdf writing
+% Identical to the main code but converted to a function
+% to allow for passing YR1, YR2 from a command line
+% during automated data processing using bash script
 %
 % Create monthly OBC fields of total alkalinity (TA) and
 % Dissolved Inorganic Carbon DIC  for COBALT
@@ -18,6 +20,8 @@
 %# Run MATLAB script and pass arguments as variable assignments
 %matlab -nodisplay -nosplash -r "YR1=${YS}; YR2=${YE}; run('esper_cobalt_OBCdaily.m'); exit;"
 
+function function_esper_cobalt_OBCdaily(YR1,YR2) 
+
 addpath /home/Dmitry.Dukhovskoy/matlab/ESPER-main;
 addpath /home/Dmitry.Dukhovskoy/matlab/ESPER-main/ESPER_LIR_Files;
 addpath /home/Dmitry.Dukhovskoy/matlab/ESPER-main/ESPER_NN_Files;
@@ -27,24 +31,20 @@ addpath /home/Dmitry.Dukhovskoy/matlab/MyMatlab;
 
 % Read depths:
 pthtopo = '/work/Dmitry.Dukhovskoy/NEP_input/topo_grid/';
-pthobc0 = '/archive/Dmitry.Dukhovskoy/NEP_input/spear_obc_daily/';
+pthobc = '/work/Dmitry.Dukhovskoy/NEP_input/spear_obc_daily/';
 %pthesper = '/work/Dmitry.Dukhovskoy/NEP_input/BGC_esper_seasfcast/';
 pthesper = '/archive/Dmitry.Dukhovskoy/NEP_input/BGC_esper_seasfcast/';
 
-dftopo = fullfile(pthtopo,'stopog.nc');
+dftopo = sprintf('%stopog.nc',pthtopo);
 % To allow for the YR arguments passed from the command line:
 %matlab -nodisplay -nosplash -r "YR1=${YS}; YR2=${YE}; run('esper_cobalt_OBCdaily.m'); exit;"
 % Uncomment these:
-if ~exist('YR1', 'var')
-  YR1 = 1994;
-end
-if ~exist('YR2', 'var')
-  YR2 = 1994;
-end
-
-% and comment this:
-%YR1 = 2022;
-%YR2 = 2022;
+%if ~exist('YR1', 'var')
+%  YR1 = 2023;
+%end
+%if ~exist('YR2', 'var')
+%  YR2 = 2023;
+%end
 
 Nyrs_save = 2;    % how many years save in 1 file
 YR2    = YR2+(Nyrs_save-1);
@@ -85,13 +85,11 @@ for YR=YR1:YR2;
   TMM = TM;
   TMM(end) = TMM(end)+1; 
 
-  pthobc = fullfile(pthobc0,sprintf('%i_e%02d',YR,enmb));
   for isegm=1:4;
     fprintf(' ====    %i  MMI=%2.2i ensmb=e%2.2i segment %i =====\n',YR, MMI, enmb, isegm);
 
     segstr = sprintf('_segment_%3.3i',isegm);
-    flobc = sprintf('OBCs_spear_daily_init%i%2.2i01_e%2.2i.nc',YR,MMI,enmb);
-    dflnc = fullfile(pthobc,flobc);
+    dflnc = sprintf('%sOBCs_spear_daily_init%i%2.2i01_e%2.2i.nc',pthobc,YR,MMI,enmb);
     fprintf('Reading %s\n',dflnc);
     %ncid = netcdf.open(dflnc, 'NOWRITE');
  
@@ -238,7 +236,6 @@ for YR=YR1:YR2;
       mkdir(pthesper);
     end
 
-    %keyboard
     if isfile(flesper_out)
       delete(flesper_out);
     end
@@ -366,33 +363,12 @@ for YR=YR1:YR2;
     ncwriteatt(flesper_out, 'time', 'units', tref_str);
     ncwriteatt(flesper_out, 'time', 'calendar', 'gregorian');
 
-    
+
     % Rearrange fields:
     for isegm = 1:4
       DATA(1:kYR-1).segm(isegm) = DATA(2:kYR).segm(isegm);
       DATA(kYR).segm(isegm).alk = [];
       DATA(kYR).segm(isegm).dic = [];
-
-      % Update time array for the 1st year for interpolation
-      dnmb_old = DATA(1).segm(isegm).dnmb(1);  
-      DV = datevec(dnmb_old);
-      dnmb_new = datenum(DV(1),DV(2),1,0,0,0);
-      DATA(1).segm(isegm).dnmb(1) = dnmb_new;
-
-      % Change the last date stamp to avoid overlapp with the next new year:
-      dnmb_old = DATA(kYR-1).segm(isegm).dnmb(end);
-      DV = datevec(dnmb_old);
-      dnmb_prev = DATA(kYR-1).segm(isegm).dnmb(end-1);
-      DV_prev = datevec(dnmb_prev);
-      % Closing date should be in the same year as all previous records
-      if DV(1) > DV_prev(1)
-        dnmb_new = datenum(DV_prev(1),12,31,23,0,0);
-        fprintf('Changing closing date in DATA %s --> %s\n',datestr(dnmb_old),datestr(dnmb_new))
-        assert(dnmb_new > dnmb_prev, 'changing closing date: last date %d should be > previous %d',...
-               dnmb_new, dnmb_prev);        
-        DATA(kYR-1).segm(isegm).dnmb(end) = dnmb_new;
-      end
-
     end
     kYR = 1;  % Start with yr=2 for the next YR, as YR-1 is already in DATA(1)
 
